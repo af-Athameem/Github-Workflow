@@ -1,0 +1,60 @@
+name: Post New GitHub Issue to Asana
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  post_to_asana:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Post to Asana via Python
+        env:
+          ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
+          ASANA_PROJECT_ID: ${{ secrets.ASANA_PROJECT_ID }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          python3 <<EOF
+          import requests
+          import os
+          import sys
+
+          url = "https://app.asana.com/api/1.0/tasks"
+          headers = {
+              "Authorization": f"Bearer {os.environ['ASANA_TOKEN']}",
+              "Content-Type": "application/json"
+          }
+          data = {
+              "data": {
+                  "name": os.environ['ISSUE_TITLE'],
+                  "notes": f"Issue: {os.environ['ISSUE_BODY']}\nURL: {os.environ['ISSUE_URL']}",
+                  "projects": [os.environ['ASANA_PROJECT_ID']],
+                  "assignee": os.getenv('ASANA_ASSIGNEE')  # Optional
+              }
+          }
+
+          print("Sending data to Asana:")
+          print(data)
+
+          try:
+              response = requests.post(url, json=data, headers=headers)
+              response.raise_for_status()
+              print("Task successfully created in Asana!")
+              print(response.json())
+          except requests.exceptions.RequestException as e:
+              print("Failed to create task in Asana.")
+              print("Error:", e)
+              print("Response content:", response.text)
+              sys.exit(1)
+          EOF
